@@ -1,0 +1,28 @@
+{
+	"name": "DebateLLM(LangGraph) FastAPI Development",
+	"build": {
+		"dockerfile": "../Dockerfile",
+		"context": ".."
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-azuretools.vscode-docker",
+				"GitHub.copilot-chat"
+			]
+	},
+	"forwardPorts": [8000],
+	"portsAttributes": {
+		"8000": {
+			"label": "DebateLLM(LangGraph) FastAPI Application",
+			"onAutoForward": "notify"
+		}
+	},
+	"postCreateCommand": "pip install -r requirements.txt",
+	"remoteUser": "root",
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {}
+	}
+	}
+}
