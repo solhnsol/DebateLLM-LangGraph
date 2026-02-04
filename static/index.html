@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DebateLLM - WebSocket Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            height: 85vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px 12px 0 0;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .setup-section {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .status {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .status.disconnected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .status.connected {
+            background: #dcfce7;
+            color: #166534;
+        }
+        
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            word-wrap: break-word;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .message.moderator {
+            background: #e0f2fe;
+            border-left: 4px solid #0284c7;
+        }
+        
+        .message.debate_agent {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+        }
+        
+        .message.judge {
+            background: #e9d5ff;
+            border-left: 4px solid #a855f7;
+        }
+        
+        .message.human {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            margin-left: 40px;
+        }
+        
+        .message.error {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            color: #991b1b;
+        }
+        
+        .message.info {
+            background: #f0fdf4;
+            border-left: 4px solid #16a34a;
+            color: #166534;
+        }
+        
+        .message-node {
+            font-size: 11px;
+            font-weight: 700;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+        }
+        
+        .message-content {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #1f2937;
+        }
+        
+        .input-section {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+            display: none;
+        }
+        
+        .input-section.active {
+            display: block;
+        }
+        
+        .input-section.hidden {
+            display: none;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .input-group input {
+            flex: 1;
+            padding: 10px 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .input-group button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .input-group button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #999;
+            text-align: center;
+        }
+        
+        .empty-state p {
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        
+        .session-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎤 DebateLLM WebSocket Test</h1>
+            <p>실시간 토론 시뮬레이션</p>
+        </div>
+        
+        <div class="setup-section">
+            <div class="form-group">
+                <label for="topic">토론 주제</label>
+                <input 
+                    type="text" 
+                    id="topic" 
+                    placeholder="예: 기본소득제 도입 찬반"
+                    value="AI 시대의 기본소득제"
+                >
+            </div>
+            
+            <div class="form-group">
+                <label for="userSide">당신의 입장</label>
+                <select id="userSide">
+                    <option value="positive">찬성</option>
+                    <option value="negative">반대</option>
+                </select>
+            </div>
+            
+            <button class="btn btn-primary" id="startBtn" onclick="startDebate()">토론 시작</button>
+            <button class="btn btn-danger" id="stopBtn" onclick="stopDebate()" style="display:none;">연결 끊기</button>
+            
+            <div class="status disconnected" id="statusIndicator">● 연결 안 됨</div>
+            <div class="session-info" id="sessionInfo"></div>
+        </div>
+        
+        <div class="chat-area" id="chatArea">
+            <div class="empty-state">
+                <p>📝 토론을 시작하세요!</p>
+                <p style="font-size: 12px; margin-top: 10px; color: #bbb;">위의 설정을 입력하고 "토론 시작" 버튼을 눌러주세요.</p>
+            </div>
+        </div>
+        
+        <div class="input-section" id="inputSection">
+            <p style="margin-bottom: 10px; font-size: 12px; color: #666;">당신의 의견을 입력하세요:</p>
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    id="userInput" 
+                    placeholder="의견을 입력하고 Enter를 누르세요..."
+                    onkeypress="if(event.key==='Enter') submitUserInput()"
+                >
+                <button onclick="submitUserInput()">전송</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let ws = null;
+        let sessionId = null;
+        let awaitingInput = false;
+        let currentStreamingNode = null;
+        let currentMessageElement = null;
+        
+        async function startDebate() {
+            const topic = document.getElementById('topic').value.trim();
+            const userSide = document.getElementById('userSide').value;
+            
+            if (!topic) {
+                alert('토론 주제를 입력해주세요.');
+                return;
+            }
+            
+            try {
+                // 세션 생성
+                const response = await fetch('/debate/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        topic: topic,
+                        user_side: userSide
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('세션 생성 실패');
+                }
+                
+                const data = await response.json();
+                sessionId = data.session_id;
+                
+                // UI 업데이트
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').style.display = 'inline-block';
+                document.getElementById('sessionInfo').textContent = `세션 ID: ${sessionId}`;
+                document.getElementById('chatArea').innerHTML = '';
+                
+                // WebSocket 연결
+                connectWebSocket();
+                
+            } catch (error) {
+                alert(`에러: ${error.message}`);
+            }
+        }
+        
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/debate/${sessionId}`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                updateStatus(true);
+                addMessage('info', '✅ WebSocket 연결 성공!');
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'message') {
+                    updateOrCreateMessage(data.node, data.content);
+                } else if (data.type === 'input_request') {
+                    awaitingInput = true;
+                    currentStreamingNode = null;
+                    currentMessageElement = null;
+                    document.getElementById('inputSection').classList.add('active');
+                    document.getElementById('userInput').focus();
+                    addMessage('info', '💬 당신의 의견을 입력해주세요.');
+                } else if (data.type === 'error') {
+                    currentStreamingNode = null;
+                    currentMessageElement = null;
+                    addMessage('error', data.content);
+                    stopDebate();
+                } else if (data.type === 'node') {
+                    // 노드 변경 시 현재 스트리밍 초기화
+                    if (data.node !== currentStreamingNode) {
+                        currentStreamingNode = null;
+                        currentMessageElement = null;
+                    }
+                    console.log(`📍 현재 노드: ${data.node}`);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                addMessage('error', `WebSocket 에러: ${error}`);
+                updateStatus(false);
+            };
+            
+            ws.onclose = () => {
+                updateStatus(false);
+                addMessage('error', '❌ WebSocket 연결 종료');
+                document.getElementById('inputSection').classList.remove('active');
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').style.display = 'none';
+            };
+        }
+        
+        function submitUserInput() {
+            const inputElement = document.getElementById('userInput');
+            const message = inputElement.value.trim();
+            
+            if (!message) {
+                alert('의견을 입력해주세요.');
+                return;
+            }
+            
+            if (!awaitingInput || !ws) {
+                alert('입력을 받을 준비가 되지 않았습니다.');
+                return;
+            }
+            
+            // 사용자 입력 전송
+            ws.send(message);
+            
+            // UI 업데이트
+            addMessage('human', message);
+            inputElement.value = '';
+            document.getElementById('inputSection').classList.remove('active');
+            awaitingInput = false;
+            currentStreamingNode = null;
+            currentMessageElement = null;
+        }
+        
+        function updateOrCreateMessage(nodeType, content) {
+            // 같은 노드의 스트리밍이면 기존 메시지 업데이트
+            if (currentStreamingNode === nodeType && currentMessageElement) {
+                const contentDiv = currentMessageElement.querySelector('.message-content');
+                if (contentDiv) {
+                    contentDiv.textContent = content;
+                }
+                const chatArea = document.getElementById('chatArea');
+                chatArea.scrollTop = chatArea.scrollHeight;
+                return;
+            }
+            
+            // 새로운 노드면 새 메시지 블록 생성
+            currentStreamingNode = nodeType;
+            currentMessageElement = createMessageElement(nodeType, content);
+            
+            const chatArea = document.getElementById('chatArea');
+            if (chatArea.querySelector('.empty-state')) {
+                chatArea.innerHTML = '';
+            }
+            chatArea.appendChild(currentMessageElement);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+        
+        function createMessageElement(nodeType, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${nodeType}`;
+            
+            if (nodeType !== 'error' && nodeType !== 'info' && nodeType !== 'human') {
+                messageDiv.innerHTML = `
+                    <div class="message-node">${nodeType}</div>
+                    <div class="message-content">${escapeHtml(content)}</div>
+                `;
+            } else {
+                messageDiv.innerHTML = `<div class="message-content">${escapeHtml(content)}</div>`;
+            }
+            
+            return messageDiv;
+        }
+        
+        function addMessage(nodeType, content) {
+            const chatArea = document.getElementById('chatArea');
+            
+            // 빈 상태 제거
+            if (chatArea.querySelector('.empty-state')) {
+                chatArea.innerHTML = '';
+            }
+            
+            const messageDiv = createMessageElement(nodeType, content);
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+        
+        function updateStatus(connected) {
+            const statusEl = document.getElementById('statusIndicator');
+            if (connected) {
+                statusEl.className = 'status connected';
+                statusEl.textContent = '● 연결됨';
+            } else {
+                statusEl.className = 'status disconnected';
+                statusEl.textContent = '● 연결 안 됨';
+            }
+        }
+        
+        function stopDebate() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            sessionId = null;
+            awaitingInput = false;
+            currentStreamingNode = null;
+            currentMessageElement = null;
+            document.getElementById('inputSection').classList.remove('active');
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').style.display = 'none';
+            document.getElementById('sessionInfo').textContent = '';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
