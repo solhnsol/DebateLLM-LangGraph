@@ -91,10 +91,16 @@ class DebateWorkflow:
             step = metadata["langgraph_step"]
             incoming_chunk = None
             
+            message_type = "unknown"
+
             if hasattr(msg, 'tool_call_chunks') and msg.tool_call_chunks:
-                incoming_chunk = msg.tool_call_chunks[0]["args"]
+                tool_info = msg.tool_call_chunks[0]
+                tool_name = tool_info.get("name", "unknown_tool")
+                incoming_chunk = tool_info["args"]
+                message_type = "tool_call"
             elif msg.content:
                 incoming_chunk = msg.content
+                message_type = "message"
             
             if incoming_chunk:
                 if step not in chat_scripts:
@@ -106,6 +112,8 @@ class DebateWorkflow:
                     if isinstance(parsed_content, dict) and "script" in parsed_content:
                         yield {
                             "type": "message",
+                            "message_type": message_type,
+                            "tool_name": tool_name if message_type == "tool_call" else None,
                             "node": metadata["langgraph_node"],
                             "content": parsed_content["script"]
                         }

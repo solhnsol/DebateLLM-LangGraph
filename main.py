@@ -68,13 +68,13 @@ async def debate_ws(websocket: WebSocket, session_id: str):
     config = {"configurable": {"thread_id": session_id}}
     while True:
         debate_gen = workflow_manager.run_debate(session_id)
-        should_continue = False
         try:
             async for event in debate_gen:
                 if event.get("type") == "message":
                     await websocket.send_json(event)
             
             state = await workflow_manager.app.aget_state(config)
+            
             if state.next and "human" in state.next:
                 await websocket.send_json({
                     "type": "input_request",

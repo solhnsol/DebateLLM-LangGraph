@@ -10,7 +10,7 @@ class BaseAgent:
             model_name: 사용할 LLM 모델명
             output_schema: 구조화된 출력을 위한 Pydantic 클래스 (None이면 일반 텍스트)
         """
-        self.llm = ChatOpenAI(model=model_name, temperature=0.7)
+        self.llm = ChatOpenAI(model=model_name, temperature=1, reasoning_effort="low")
         
         if output_schema:
             self.llm = self.llm.with_structured_output(output_schema)
