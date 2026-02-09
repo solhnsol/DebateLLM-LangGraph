@@ -21,6 +21,7 @@ class DebateWorkflow:
         self.workflow.add_node("debater", self.nodes.debater_node)
         self.workflow.add_node("human", self.nodes.human_node)
         self.workflow.add_node("judge", self.nodes.judge_node)
+        self.workflow.add_node("score", self.nodes.score_node)
 
         self.workflow.add_edge(START, "moderator")
         self.workflow.add_conditional_edges(
@@ -29,11 +30,12 @@ class DebateWorkflow:
             {
                 "debater": "debater",
                 "human": "human",
-                "judge": "judge"
+                "end": "judge"
             }
         )
         self.workflow.add_edge("debater", "moderator")
         self.workflow.add_edge("human", "moderator")
+        self.workflow.add_edge("human", "score")
         self.workflow.add_edge("judge", END)
 
     async def compile(self, db_connection):
@@ -78,44 +80,74 @@ class DebateWorkflow:
         chat_scripts = {}
         config = {"configurable": {"thread_id": session_id}}
 
-        async for msg, metadata in self.app.astream(
-            None, 
-            config, 
-            stream_mode="messages"
+        async for event in self.app.astream_events(
+            None,
+            config,
+            version="v2"
         ):
-            yield {"type": "node", "node": metadata["langgraph_node"]}
+            event_type = event.get("event", "Unkown")
 
-            if metadata["langgraph_node"] == "human":
+            metadata = event.get("metadata", {})
+            node = metadata.get("langgraph_node", None)
+
+            if not node or node == "human":
+                continue
+            
+            # 노드 정보 전송
+            if event_type in ("on_chat_model_stream", "on_chat_event"):
+                yield {"type": "node", "node": node}
+
+            # 커스텀 이벤트 처리
+            if event_type == "on_custom_event":
+                if event["name"] == "score_update":
+                    data = event["data"]
+
+                    yield {
+                        "type": "score_update",
+                        "content": data["scores"]
+                    }
+                    continue
+            
+            if node == "score":
                 continue
 
-            step = metadata["langgraph_step"]
-            incoming_chunk = None
-            
-            message_type = "unknown"
+            if event_type == "on_chat_model_stream":
+                chunk = event["data"]["chunk"]
 
-            if hasattr(msg, 'tool_call_chunks') and msg.tool_call_chunks:
-                tool_info = msg.tool_call_chunks[0]
-                tool_name = tool_info.get("name", "unknown_tool")
-                incoming_chunk = tool_info["args"]
-                message_type = "tool_call"
-            elif msg.content:
-                incoming_chunk = msg.content
-                message_type = "message"
-            
-            if incoming_chunk:
-                if step not in chat_scripts:
-                    chat_scripts[step] = ""
-                chat_scripts[step] += incoming_chunk
+                step = metadata.get("langgraph_step", event.get("run_id"))
 
-                try:
-                    parsed_content = parse_partial_json(chat_scripts[step])
-                    if isinstance(parsed_content, dict) and "script" in parsed_content:
-                        yield {
-                            "type": "message",
-                            "message_type": message_type,
-                            "tool_name": tool_name if message_type == "tool_call" else None,
-                            "node": metadata["langgraph_node"],
-                            "content": parsed_content["script"]
-                        }
-                except Exception:
-                    pass
+                incoming_chunk = None
+                message_type = "unknown"
+                tool_name = None
+
+                # 툴 호출 청크
+                if chunk.tool_call_chunks:
+                    tool_info = chunk.tool_call_chunks[0]
+                    tool_name = tool_info.get("name", "unknown_tool")
+                    incoming_chunk = tool_info.get("args")
+                    message_type = "tool_call"
+                # 일반 메시지 청크
+                elif chunk.content:
+                    incoming_chunk = chunk.content
+                    message_type = "output"
+
+                if incoming_chunk:
+                    if step not in chat_scripts:
+                        chat_scripts[step] = ""
+                    
+                    chat_scripts[step] += incoming_chunk
+
+                    try:
+                        parsed_content = parse_partial_json(chat_scripts[step])
+                        
+                        if isinstance(parsed_content, dict):
+                            yield {
+                                "type": "message",
+                                "node": node,
+                                "message_type": message_type,
+                                "script": parsed_content["script"],
+                                "full_content": parsed_content,
+                                "tool_name": tool_name
+                            }
+                    except Exception:
+                        pass

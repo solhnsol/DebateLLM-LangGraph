@@ -26,7 +26,7 @@ workflow_manager = DebateWorkflow()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🔄 Connecting to DB and Compiling Graph...")
-    async with aiosqlite.connect("debate_history.db") as db_conn:
+    async with aiosqlite.connect("db/debate_history.db") as db_conn:
         await workflow_manager.compile(db_conn)
         yield
         print("🛑 DB Connection Closed")
@@ -71,6 +71,8 @@ async def debate_ws(websocket: WebSocket, session_id: str):
         try:
             async for event in debate_gen:
                 if event.get("type") == "message":
+                    await websocket.send_json(event)
+                elif event.get("type") == "score_update":
                     await websocket.send_json(event)
             
             state = await workflow_manager.app.aget_state(config)
