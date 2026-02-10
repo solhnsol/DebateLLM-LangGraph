@@ -23,6 +23,7 @@ cohere==5.20.2
 colorama==0.4.6
 cryptography==46.0.4
 cyclopts==4.5.1
+dataclasses-json==0.6.7
 diskcache==5.6.3
 distro==1.9.0
 dnspython==2.8.0
@@ -76,8 +77,13 @@ jsonschema==4.26.0
 jsonschema-path==0.3.4
 jsonschema-specifications==2025.9.1
 keyring==25.7.0
-langchain-core==1.2.7
+langchain==1.2.9
+langchain-classic==1.0.1
+langchain-community==0.4.1
+langchain-core==1.2.9
 langchain-openai==1.1.7
+langchain-tavily==0.2.17
+langchain-text-splitters==1.1.0
 langgraph==1.0.7
 langgraph-checkpoint==4.0.0
 langgraph-checkpoint-sqlite==3.0.3
@@ -89,12 +95,15 @@ logfire-api==4.21.0
 lupa==2.6
 markdown-it-py==4.0.0
 MarkupSafe==3.0.3
+marshmallow==3.26.2
 mcp==1.26.0
 mdurl==0.1.2
 mistralai==1.9.11
 more-itertools==10.8.0
 multidict==6.7.1
+mypy_extensions==1.1.0
 nexus-rpc==1.2.0
+numpy==2.4.2
 openai==2.16.0
 openapi-pydantic==0.5.1
 opentelemetry-api==1.39.1
@@ -161,6 +170,7 @@ SQLAlchemy==2.0.46
 sqlite-vec==0.1.6
 sse-starlette==3.2.0
 starlette==0.50.0
+tavily-python==0.7.21
 temporalio==1.20.0
 tenacity==9.1.2
 tiktoken==0.12.0
@@ -169,6 +179,7 @@ tqdm==4.67.2
 typer==0.21.1
 types-protobuf==6.32.1.20251210
 types-requests==2.32.4.20260107
+typing-inspect==0.9.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 ujson==5.11.0
