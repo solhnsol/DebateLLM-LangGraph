@@ -8,6 +8,7 @@ import aiosqlite
 import os
 
 from app.graph.workflow import DebateWorkflow
+from app.core.config import setup_logging
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -25,6 +26,7 @@ workflow_manager = DebateWorkflow()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    setup_logging()
     print("🔄 Connecting to DB and Compiling Graph...")
     async with aiosqlite.connect("db/debate_history.db") as db_conn:
         await workflow_manager.compile(db_conn)
@@ -70,10 +72,9 @@ async def debate_ws(websocket: WebSocket, session_id: str):
         debate_gen = workflow_manager.run_debate(session_id)
         try:
             async for event in debate_gen:
-                if event.get("type") == "message":
-                    await websocket.send_json(event)
-                elif event.get("type") == "score_update":
-                    await websocket.send_json(event)
+                if event["type"] == "score_update":
+                    print(f"Score Update Event: {event}")
+                await websocket.send_json(event)
             
             state = await workflow_manager.app.aget_state(config)
             
@@ -81,6 +82,7 @@ async def debate_ws(websocket: WebSocket, session_id: str):
                 await websocket.send_json({
                     "type": "input_request",
                     "node": "human",
+                    "step": workflow_manager.current_step + 1
                 })
                 
                 # 사용자 입력 대기
@@ -89,7 +91,7 @@ async def debate_ws(websocket: WebSocket, session_id: str):
                 await workflow_manager.user_input(session_id, user_msg)
                 continue 
             else:
-                await websocket.send_json({"type": "status", "content": "토론이 종료되었습니다."})
+                await websocket.send_json({"type": "status", "content": "END"})
                 await websocket.close()
                 break
 

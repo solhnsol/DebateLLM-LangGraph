@@ -9,9 +9,9 @@ from app.agents.judge import JudgeAgent
 from app.agents.score import ScoreAgent
 
 class DebateNodes:
-    def __init__(self):
+    def __init__(self, tools: list = None):
         self.moderator_agent = ModeratorAgent()
-        self.debater_agent = DebaterAgent()
+        self.debater_agent = DebaterAgent(tools=tools)
         self.judge_agent = JudgeAgent()
         self.score_agent = ScoreAgent()
 
@@ -25,9 +25,10 @@ class DebateNodes:
         }
 
     async def debater_node(self, state: DebateState):
-        response = await self.debater_agent.debate_chat(state.topic, state.messages, state.user_side)
+        response:AIMessage = await self.debater_agent.debate_chat(state.topic, state.messages, state.user_side)
+        response.name = "debater"
         return {
-            "messages": [AIMessage(content=response.script, name=state.next_speaker)],
+            "messages": [response],
             "next_speaker": "moderator"
         }
 
@@ -48,10 +49,8 @@ class DebateNodes:
         
         await adispatch_custom_event(
             name= "score_update",
-            data={
-                "type": "score_update",
-                "scores": response.model_dump()
-        })
+            data= response.model_dump()
+            )
 
     def router(self, state: DebateState) -> str:
         if state.next_speaker == "judge":

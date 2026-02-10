@@ -11,10 +11,6 @@ class ModeratorOutput(BaseModel):
     next_speaker: Literal["positive", "negative", "end"]
     "다음 발언자 지정 혹은 토론 종료"
 
-class DebaterOutput(BaseModel):
-    script: str
-    "토론자의 발언"
-
 class JudgeOutput(BaseModel):
     script: str
     "심사위원의 평가 멘트"
@@ -22,11 +18,11 @@ class JudgeOutput(BaseModel):
     "승리한 쪽"
 
 class ScoreOutput(BaseModel):
-    reasoning_score: int = Field(..., ge=0, le=100)
+    reasoning: int = Field(..., ge=0, le=100)
     "논리 점수 (0-100)"
-    substantiality_score: int = Field(..., ge=0, le=100)
+    substantiality: int = Field(..., ge=0, le=100)
     "근거 점수 (0-100)"
-    delivery_and_manner_score: int = Field(..., ge=0, le=100)
+    manner: int = Field(..., ge=0, le=100)
     "전달력 및 매너 점수 (0-100)"
 
 class DebateState(BaseModel):

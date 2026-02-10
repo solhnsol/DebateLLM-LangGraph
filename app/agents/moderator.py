@@ -10,7 +10,7 @@ MODERATOR_PROMPT = """당신은 최고 수준의 토론 사회자입니다.
 
 class ModeratorAgent(BaseAgent):
     def __init__(self):
-        super().__init__(output_schema=ModeratorOutput)
+        super().__init__(output_schema=ModeratorOutput, temperature=0.3)
         
     async def moderate_chat(self, topic: str, messages: MessageList) -> ModeratorOutput:
         prompt = MODERATOR_PROMPT.format(topic=topic)

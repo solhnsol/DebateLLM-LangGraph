@@ -193,7 +193,7 @@
             nodeVisits.forEach((visit, idx) => {
                 const btn = document.createElement('button');
                 btn.className = 'node' + (selectedNodeIdx === idx ? ' selected' : '');
-                btn.textContent = `${visit.node} #${visit.count}`;
+                btn.textContent = `${visit.node} #${visit.count}${visit.step !== undefined ? ' (step: '+visit.step+')' : ''}`;
                 btn.onclick = () => {
                     selectedNodeIdx = idx;
                     renderNodes();
@@ -285,29 +285,6 @@
                 } catch {
                     data = event.data;
                 }
-                // score_update 처리
-                if (data.type === 'score_update') {
-                    const scores = data.content;
-                    const scoreCard = document.getElementById('scoreCard');
-                    const scoreContent = document.getElementById('scoreContent');
-                    
-                    scoreCard.style.display = 'block';
-                    scoreContent.innerHTML = `
-                        <div class="score-item">
-                            <div class="score-label">논리 (Reasoning)</div>
-                            <div class="score-value">${scores.reasoning_score}</div>
-                        </div>
-                        <div class="score-item">
-                            <div class="score-label">근거 (Substantiality)</div>
-                            <div class="score-value">${scores.substantiality_score}</div>
-                        </div>
-                        <div class="score-item">
-                            <div class="score-label">전달력 (Delivery)</div>
-                            <div class="score-value">${scores.delivery_and_manner_score}</div>
-                        </div>
-                    `;
-                    return;
-                }
 
                 // input_request 처리
                 if (data.type === 'input_request') {
@@ -316,19 +293,27 @@
                     showChatInput(false);
                 }
 
-                // node 방문 기록 (연속 node별로 그룹핑)
+                // node 방문 기록 (node + step 쌍으로 그룹핑)
                 const node = data.node || 'Unknown';
+                const step = data.step;
+
                 if (!nodeResponses[node]) nodeResponses[node] = [];
                 nodeResponses[node].push(data);
 
-                if (
-                    nodeVisits.length > 0 &&
-                    nodeVisits[nodeVisits.length - 1].node === node
-                ) {
-                    // 마지막 그룹과 node가 같으면 responses에 추가
-                    nodeVisits[nodeVisits.length - 1].responses.push(data);
+                // 같은 (node, step) 쌍을 가진 기존 그룹 찾기
+                let existingGroup = null;
+                for (let i = nodeVisits.length - 1; i >= 0; i--) {
+                    if (nodeVisits[i].node === node && nodeVisits[i].step === step && step !== undefined) {
+                        existingGroup = nodeVisits[i];
+                        break;
+                    }
+                }
+
+                if (existingGroup) {
+                    // 같은 (node, step)이면 기존 그룹에 추가
+                    existingGroup.responses.push(data);
                 } else {
-                    // node가 바뀌면 새 그룹
+                    // 새로운 (node, step) 쌍이면 새 그룹 생성
                     let count = 1;
                     for (let i = nodeVisits.length - 1; i >= 0; i--) {
                         if (nodeVisits[i].node === node) {
@@ -336,7 +321,7 @@
                             break;
                         }
                     }
-                    nodeVisits.push({ node, count, responses: [data] });
+                    nodeVisits.push({ node, step, count, responses: [data] });
                 }
                 selectedNodeIdx = nodeVisits.length - 1;
                 renderNodes();

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Type, Any
 
 class BaseAgent:
-    def __init__(self, model_name: str = "gpt-5-mini", output_schema: Type[BaseModel] = None, temperature: float = 1):
+    def __init__(self, model_name: str = "gpt-5-mini", temperature: float = 1, output_schema: Type[BaseModel] = None, tools: list = None):
         """
         Args:
             model_name: 사용할 LLM 모델명
@@ -14,6 +14,10 @@ class BaseAgent:
         
         if output_schema:
             self.llm = self.llm.with_structured_output(output_schema)
+        elif tools:
+            self.llm = self.llm.bind_tools(tools)
+        
+        
     
     def _create_prompt(self, system_instruction: str) -> ChatPromptTemplate:
         """
