@@ -48,8 +48,8 @@ class DebateNodes:
         response = await self.score_agent.score_debate(state.topic, state.messages, state.user_side)
         
         await adispatch_custom_event(
-            name= "score_update",
-            data= response.model_dump()
+                name= "score_update",
+                data= response.model_dump()
             )
 
     def router(self, state: DebateState) -> str:

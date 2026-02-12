@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ import os
 
 from app.graph.workflow import DebateWorkflow
 from app.core.config import setup_logging
+from app.db.db_manager import DBManager
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -23,14 +24,17 @@ class DebateInitiateRequest(BaseModel):
 
 # 전역 인스턴스
 workflow_manager = DebateWorkflow()
+db_manager = DBManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     print("🔄 Connecting to DB and Compiling Graph...")
-    async with aiosqlite.connect("db/debate_history.db") as db_conn:
+    async with aiosqlite.connect("sqlite_db/debate_history.db") as db_conn:
         await workflow_manager.compile(db_conn)
+        await db_manager.init_tables()
         yield
+        await db_manager.engine.dispose()
         print("🛑 DB Connection Closed")
 
 app = FastAPI(lifespan=lifespan)
@@ -42,21 +46,37 @@ if os.path.exists(static_dir):
 
 @app.get("/")
 async def root():
-    """정적 테스트 페이지 제공"""
+    """테스트 페이지 보기"""
     return FileResponse(os.path.join(static_dir, "index.html"))
 
-@app.post("/debate/create")
-async def initiate_debate(request: DebateInitiateRequest):
+@app.get("/sessions")
+async def get_sessions():
+    """현재 존재하는 세션 목록 가져오기"""
+    sessions = await db_manager.get_all_sessions()
+    return {"status": "success", "sessions": sessions}
+
+@app.post("/sessions")
+async def create_session(request: DebateInitiateRequest):
+    """세션 생성하기"""
     session_id = await workflow_manager.generate_debate(
         session_id=request.session_id,
         topic=request.topic,
         user_side=request.user_side
     )
-    return {"session_id": session_id}
-    
+    return {"status": "success", "session_id": session_id}
 
-@app.websocket("/ws/debate/{session_id}")
+@app.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """세션 삭제하기"""
+    try:
+        await db_manager.delete_session(session_id)
+        return {"status": "success", "session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.websocket("/ws/{session_id}")
 async def debate_ws(websocket: WebSocket, session_id: str):
+    """WebSocket 연결해서 토론 진행하기"""
     await websocket.accept()
     if not await workflow_manager.is_session_valid(session_id):
         print(f"❌ Invalid Session ID access attempt: {session_id}")
@@ -72,8 +92,6 @@ async def debate_ws(websocket: WebSocket, session_id: str):
         debate_gen = workflow_manager.run_debate(session_id)
         try:
             async for event in debate_gen:
-                if event["type"] == "score_update":
-                    print(f"Score Update Event: {event}")
                 await websocket.send_json(event)
             
             state = await workflow_manager.app.aget_state(config)
@@ -98,5 +116,4 @@ async def debate_ws(websocket: WebSocket, session_id: str):
         except WebSocketDisconnect:
             break
         except Exception as e:
-            print(f"Error: {e}")
-            break
+            raise e

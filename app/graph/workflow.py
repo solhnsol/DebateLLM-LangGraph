@@ -62,6 +62,8 @@ class DebateWorkflow:
 
     async def compile(self, db_connection):
         checkpointer = AsyncSqliteSaver(db_connection)
+        await checkpointer.setup()
+        
         self.app = self.workflow.compile(checkpointer=checkpointer, interrupt_before=["human"])
 
     async def is_session_valid(self, session_id: str) -> bool:
@@ -226,7 +228,6 @@ class DebateWorkflow:
                         }
                     }
             elif event_type == "on_custom_event" and event_name == "score_update":
-                logger.debug(f"Score Update Event Data: {data}")
                 yield {
                     "type": "score_update",
                     "node": node,
