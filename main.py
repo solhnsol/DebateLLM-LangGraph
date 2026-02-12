@@ -6,7 +6,7 @@ import aiosqlite
 import os
 
 from app.models.schemas import DebateInitiateRequest
-from app.core.config import setup_logging
+from app.core.config import setup_logging, get_db_path
 from app.db.db_manager import db_manager
 from app.graph.workflow import workflow
 
@@ -17,7 +17,15 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     setup_logging()
     print("🔄 Connecting to DB and Compiling Graph...")
-    async with aiosqlite.connect("sqlite_db/debate_history.db") as db_conn:
+    db_path = get_db_path()
+    
+    # DB 파일이 위치할 디렉토리 생성
+    db_dir = os.path.dirname(db_path)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+        print(f"📁 Created database directory: {db_dir}")
+    
+    async with aiosqlite.connect(db_path) as db_conn:
         await workflow.compile(db_conn)
         await db_manager.init_tables()
         yield
