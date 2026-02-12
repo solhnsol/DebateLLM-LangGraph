@@ -42,6 +42,7 @@ fastar==0.8.0
 fastavro==1.12.1
 fastmcp==2.14.4
 filelock==3.20.3
+filetype==1.2.0
 frozenlist==1.8.0
 fsspec==2026.1.0
 genai-prices==0.0.52
@@ -81,6 +82,7 @@ langchain==1.2.9
 langchain-classic==1.0.1
 langchain-community==0.4.1
 langchain-core==1.2.9
+langchain-google-genai==4.2.0
 langchain-openai==1.1.7
 langchain-tavily==0.2.17
 langchain-text-splitters==1.1.0
