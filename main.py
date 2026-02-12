@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import aiosqlite
 import os
@@ -33,7 +34,14 @@ async def lifespan(app: FastAPI):
         print("🛑 DB Connection Closed")
 
 app = FastAPI(lifespan=lifespan)
-
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 테스트를 위해 일시적으로 전체 허용
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # 정적 파일 제공
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
