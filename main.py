@@ -1,37 +1,24 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import Optional, Literal
 from contextlib import asynccontextmanager
 import aiosqlite
 import os
 
-from app.graph.workflow import DebateWorkflow
+from app.models.schemas import DebateInitiateRequest
 from app.core.config import setup_logging
-from app.db.db_manager import DBManager
+from app.db.db_manager import db_manager
+from app.graph.workflow import workflow
 
 from dotenv import load_dotenv
 load_dotenv()
-
-class DebateInitiateRequest(BaseModel):
-    topic: str
-    "해당 세션에서 토론할 주제입니다."
-    user_side: Literal["positive", "negative"]
-    "사용자가 맡을 토론자 역할입니다."
-    session_id: Optional[str] = None
-    "생성한 세션의 id입니다. 지정하지 않으면 새로 생성됩니다."
-
-# 전역 인스턴스
-workflow_manager = DebateWorkflow()
-db_manager = DBManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     print("🔄 Connecting to DB and Compiling Graph...")
     async with aiosqlite.connect("sqlite_db/debate_history.db") as db_conn:
-        await workflow_manager.compile(db_conn)
+        await workflow.compile(db_conn)
         await db_manager.init_tables()
         yield
         await db_manager.engine.dispose()
@@ -58,7 +45,7 @@ async def get_sessions():
 @app.post("/sessions")
 async def create_session(request: DebateInitiateRequest):
     """세션 생성하기"""
-    session_id = await workflow_manager.generate_debate(
+    session_id = await workflow.generate_debate(
         session_id=request.session_id,
         topic=request.topic,
         user_side=request.user_side
@@ -78,7 +65,7 @@ async def delete_session(session_id: str):
 async def debate_ws(websocket: WebSocket, session_id: str):
     """WebSocket 연결해서 토론 진행하기"""
     await websocket.accept()
-    if not await workflow_manager.is_session_valid(session_id):
+    if not await workflow.is_session_valid(session_id):
         print(f"❌ Invalid Session ID access attempt: {session_id}")
         await websocket.send_json({
             "type": "error", 
@@ -89,24 +76,24 @@ async def debate_ws(websocket: WebSocket, session_id: str):
     
     config = {"configurable": {"thread_id": session_id}}
     while True:
-        debate_gen = workflow_manager.run_debate(session_id)
+        debate_gen = workflow.run_debate(session_id)
         try:
             async for event in debate_gen:
                 await websocket.send_json(event)
             
-            state = await workflow_manager.app.aget_state(config)
+            state = await workflow.app.aget_state(config)
             
             if state.next and "human" in state.next:
                 await websocket.send_json({
                     "type": "input_request",
                     "node": "human",
-                    "step": workflow_manager.current_step + 1
+                    "step": workflow.current_step[session_id] + 1
                 })
                 
                 # 사용자 입력 대기
                 user_msg = await websocket.receive_text()
                 
-                await workflow_manager.user_input(session_id, user_msg)
+                await workflow.user_input(session_id, user_msg)
                 continue 
             else:
                 await websocket.send_json({"type": "status", "content": "END"})

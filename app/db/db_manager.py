@@ -51,3 +51,5 @@ class DBManager:
             result = await conn.execute(stmt)
             
             return result.scalars().all()
+
+db_manager = DBManager()

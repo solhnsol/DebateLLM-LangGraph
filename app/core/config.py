@@ -13,5 +13,7 @@ def setup_logging():
     
     logger_httpx = logging.getLogger("httpx")
     logger_httpx.setLevel(logging.WARNING)
+    logger_gemini = logging.getLogger("google_genai")
+    logger_gemini.setLevel(logging.WARNING)
     logger_app = logging.getLogger("app")
     logger_app.setLevel(logging.DEBUG)

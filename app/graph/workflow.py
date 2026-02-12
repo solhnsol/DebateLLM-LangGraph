@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 from langchain_core.messages import HumanMessage
 from langchain_core.utils.json import parse_partial_json
 from langgraph.graph import StateGraph, START, END
@@ -7,9 +7,9 @@ from langgraph.prebuilt import ToolNode, tools_condition
 import json
 
 from app.models.schemas import DebateState
-from app.graph.nodes import DebateNodes
-from app.tools.tool_manager import ToolManager
-from app.models.schemas import ScoreOutput
+from app.graph.nodes import set_nodes, nodes
+from app.agents.base import LLM_USED
+from app.tools.tool_manager import tool_manager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,16 +17,18 @@ logger = logging.getLogger(__name__)
 class DebateWorkflow:
     def __init__(self):
         self.workflow = StateGraph(DebateState)
-        self.tools = ToolManager().get_tools()
-        self.nodes = DebateNodes(tools=self.tools)
+        self.tools = tool_manager.get_tools()
+        if len(self.tools) > 0:
+            set_nodes(tools=self.tools)
+        self.nodes = nodes
         
         self.tool_map = {'tavily_search': 'search'}
-        self.pass_events = ("on_prompt_start", "on_prompt_end", "on_chain_stream", "on_chat_model_start")
+        self.pass_events = ("on_prompt_start", "on_prompt_end", "on_chain_stream", "on_chat_model_start", "on_parser_start", "on_parser_end")
 
         self._build_graph()
         
         self.app = None
-        self.current_step = None  # Track current step for each session
+        self.current_step = dict()  # Track current step for each session
 
     def _build_graph(self):
         self.workflow.add_node("moderator", self.nodes.moderator_node)
@@ -63,15 +65,19 @@ class DebateWorkflow:
     async def compile(self, db_connection):
         checkpointer = AsyncSqliteSaver(db_connection)
         await checkpointer.setup()
-        
+
         self.app = self.workflow.compile(checkpointer=checkpointer, interrupt_before=["human"])
 
     async def is_session_valid(self, session_id: str) -> bool:
+        if self.app is None:
+            raise RuntimeError("ERROR: Workflow not compiled.")
         config = {"configurable": {"thread_id": session_id}}
         state_snapshot = await self.app.aget_state(config)
         return bool(state_snapshot.values and "topic" in state_snapshot.values)
 
-    async def generate_debate(self, session_id: Optional[str], topic: str, user_side: str):
+    async def generate_debate(self, session_id: Optional[str], topic: str, user_side: Literal["pro", "con"]):
+        if self.app is None:
+            raise RuntimeError("ERROR: Workflow not compiled.")
         import uuid
         if not session_id:
             session_id = str(uuid.uuid4())
@@ -81,12 +87,14 @@ class DebateWorkflow:
             "topic": topic,
             "user_side": user_side,
             "next_speaker": "moderator",
-            "messages": []
+            "messages": [HumanMessage(content="토론 시작")] if LLM_USED == "google" else [],
         }
         await self.app.aupdate_state(config, values=initial_state)
         return session_id
 
     async def user_input(self, session_id: str, user_message: str):
+        if self.app is None:
+            raise RuntimeError("ERROR: Workflow not compiled.")
         config = {"configurable": {"thread_id": session_id}}
         state = await self.app.aget_state(config)
         speaker = state.values.get("user_side", "unknown")
@@ -101,6 +109,8 @@ class DebateWorkflow:
         )
 
     async def run_debate(self, session_id: Optional[str]):
+        if self.app is None:
+            raise RuntimeError("ERROR: Workflow not compiled.")
         chat_scripts = {}
         config = {"configurable": {"thread_id": session_id}}
 
@@ -109,8 +119,8 @@ class DebateWorkflow:
             config,
             version="v2"
         ):
-            event_type = event.get("event", "Unkown")
-            event_name = event.get("name", "Unkown")
+            event_type = event.get("event", "Unknown")
+            event_name = event.get("name", "Unknown")
             metadata = event.get("metadata", {})
             node = metadata.get("langgraph_node", None)
             step = metadata.get("langgraph_step", None)
@@ -118,7 +128,7 @@ class DebateWorkflow:
             
             # Update current step
             if step is not None:
-                self.current_step = step
+                self.current_step[session_id] = step
 
             if node is None:
                 continue
@@ -146,6 +156,10 @@ class DebateWorkflow:
                 chunk = data.get("chunk", "").content
                 if step not in chat_scripts:
                     chat_scripts[step] = ""
+                if isinstance(chunk, list):
+                    if len(chunk) == 0:
+                        continue
+                    chunk = chunk[0]["text"]
                 chat_scripts[step] += chunk
 
                 if node in ["moderator", "judge"]:
@@ -168,14 +182,22 @@ class DebateWorkflow:
                     }
                 }
             elif event_type == "on_chat_model_end":
-                output = data['output'].content
+                output = data.get("output")
+                if output is None:
+                    logger.warning(f"No output found in on_chat_model_end event for node: {node}, step: {step}")
+                    continue
+                else:
+                    content = getattr(output, "content")
+                if content is None:
+                    logger.warning(f"No content found in output for on_chat_model_end event for node: {node}, step: {step}")
+                    continue
                 if node in ["moderator", "judge"]:
                     try:
-                        parsed = parse_partial_json(output)
+                        parsed = parse_partial_json(content)
                     except:
                         parsed = None
                 else:
-                    parsed = {"script": output}
+                    parsed = {"script": content}
                 
                 if step in chat_scripts:
                     yield {
@@ -185,7 +207,7 @@ class DebateWorkflow:
                         "content": {
                             "status": "complete",
                             "json_message": parsed,
-                            "raw_message": output,
+                            "raw_message": content,
                         }
                     }
                     del chat_scripts[step]
@@ -242,3 +264,5 @@ class DebateWorkflow:
                 }
             else:
                 logger.warning(f"Unhandled event type: {event_type} in node: {node} with data: {data}")
+
+workflow = DebateWorkflow()

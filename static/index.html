@@ -69,6 +69,73 @@
             background: #4a90e2;
             color: #fff;
         }
+        #messageContainer {
+            margin-bottom: 24px;
+        }
+        #messageContainer h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 14px;
+        }
+        .message-block {
+            background: #fff;
+            border-left: 4px solid #4a90e2;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        .message-timestamp {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+        .message-text {
+            color: #222;
+        }
+        #messagesHistoryContainer {
+            margin-top: 24px;
+        }
+        #messagesHistoryContainer h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 14px;
+        }
+        #messagesHistory {
+            background: #222;
+            color: #e3e3e3;
+            border-radius: 6px;
+            padding: 18px;
+            min-height: 180px;
+            max-height: 400px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        .message-history-item {
+            background: #333;
+            border-left: 3px solid #4a90e2;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 3px;
+            color: #e3e3e3;
+        }
+        .message-history-timestamp {
+            color: #888;
+            font-size: 10px;
+            margin-bottom: 4px;
+        }
+        .message-history-text {
+            color: #fff;
+            word-break: break-word;
+        }
         #responses {
             background: #222;
             color: #e3e3e3;
@@ -156,8 +223,8 @@
         <div id="sessionForm">
             <input type="text" id="topic" placeholder="토론 주제" />
             <select id="userSide">
-                <option value="positive">찬성</option>
-                <option value="negative">반대</option>
+                <option value="pro">찬성</option>
+                <option value="con">반대</option>
             </select>
             <input type="text" id="sessionId" placeholder="세션 ID (자동 생성 가능)" />
             <button type="button" id="sessionCreateBtn">세션 생성 및 연결</button>
@@ -169,7 +236,18 @@
         </div>
 
         <div id="nodes"></div>
+        
+        <div id="messageContainer" style="display: none;">
+            <h3>💬 메시지 스트리밍</h3>
+            <div id="messages"></div>
+        </div>
+
         <div id="responses">응답이 여기에 표시됩니다.</div>
+
+        <div id="messagesHistoryContainer">
+            <h3>📝 메시지 히스토리 (전체)</h3>
+            <div id="messagesHistory">메시지가 여기에 표시됩니다.</div>
+        </div>
         <div id="chatInputContainer">
             <input type="text" id="chatInput" placeholder="채팅 입력" />
             <button type="button" id="chatSendBtn">전송</button>
@@ -183,6 +261,7 @@
         let nodeVisits = [];
         let selectedNodeIdx = null;
         let globalTimerStart = null;
+        let allMessages = [];  // 전체 메시지 히스토리
 
         function getElapsedSeconds() {
             if (!globalTimerStart) return 0;
@@ -206,11 +285,17 @@
                 btn.textContent = `${visit.node} #${visit.count}${visit.step !== undefined ? ' (step: '+visit.step+')' : ''}`;
                 btn.onclick = () => {
                     selectedNodeIdx = idx;
-                    renderNodes();
-                    renderResponses();
+                    updateDisplay();
                 };
                 nodesDiv.appendChild(btn);
             });
+        }
+
+        function updateDisplay() {
+            renderNodes();
+            renderResponses();
+            renderMessages();
+            renderAllMessagesHistory();
         }
 
         function renderResponses() {
@@ -221,26 +306,105 @@
             }
             const visit = nodeVisits[selectedNodeIdx];
             const responses = visit.responses || [];
-            if (responses.length === 0) {
+            
+            // message 제외한 다른 응답들만 표시
+            const otherResponses = responses.filter(r => r.type !== 'message');
+            
+            if (otherResponses.length === 0) {
                 respDiv.textContent = '응답 없음.';
+            } else {
+                respDiv.textContent = otherResponses.map(r => JSON.stringify(r, null, 2)).join('\n\n---\n\n');
+            }
+        }
+
+        function renderMessages() {
+            const messageDiv = document.getElementById('messages');
+            const messageContainer = document.getElementById('messageContainer');
+            
+            if (selectedNodeIdx === null || selectedNodeIdx >= nodeVisits.length) {
+                messageContainer.style.display = 'none';
                 return;
             }
-            let lastMessageIdx = -1;
-            for (let i = responses.length - 1; i >= 0; i--) {
-                if (responses[i].type === 'message') {
-                    lastMessageIdx = i;
-                    break;
-                }
+            
+            const visit = nodeVisits[selectedNodeIdx];
+            const responses = visit.responses || [];
+            
+            // message 타입만 추출
+            const messages = responses.filter(r => r.type === 'message');
+            const latestMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+            
+            if (!latestMessage) {
+                messageContainer.style.display = 'none';
+                return;
+            }
+            
+            messageContainer.style.display = 'block';
+            messageDiv.innerHTML = '';
+            
+            const msgBlock = document.createElement('div');
+            msgBlock.className = 'message-block';
+            
+            const timestamp = document.createElement('div');
+            timestamp.className = 'message-timestamp';
+            timestamp.textContent = `[${latestMessage.elapsed_seconds.toFixed(3)}s] Latest Message`;
+            
+            const content = document.createElement('div');
+            content.className = 'message-text';
+            // json_message.script 추출
+            let messageText = '';
+            if (latestMessage.content && latestMessage.content.json_message && latestMessage.content.json_message.script) {
+                messageText = latestMessage.content.json_message.script;
+            } else if (latestMessage.data && latestMessage.data.json_message && latestMessage.data.json_message.script) {
+                messageText = latestMessage.data.json_message.script;
+            } else {
+                messageText = JSON.stringify(latestMessage, null, 2);
+            }
+            content.textContent = messageText;
+            
+            msgBlock.appendChild(timestamp);
+            msgBlock.appendChild(content);
+            messageDiv.appendChild(msgBlock);
+        }
+
+        function renderAllMessagesHistory() {
+            const historyDiv = document.getElementById('messagesHistory');
+
+            if (selectedNodeIdx === null || selectedNodeIdx >= nodeVisits.length) {
+                historyDiv.textContent = '노드를 선택하세요.';
+                return;
             }
 
-            const displayResponses = responses.filter((r, idx) => {
-                if (r.type === 'message') {
-                    return idx === lastMessageIdx;
-                }
-                return true;
+            const visit = nodeVisits[selectedNodeIdx];
+            const responses = visit.responses || [];
+            const messages = responses.filter(r => r.type === 'message');
+
+            if (messages.length === 0) {
+                historyDiv.textContent = '메시지가 없습니다.';
+                return;
+            }
+
+            historyDiv.innerHTML = '';
+
+            messages.forEach((msg, idx) => {
+                const msgItem = document.createElement('div');
+                msgItem.className = 'message-history-item';
+
+                const timestamp = document.createElement('div');
+                timestamp.className = 'message-history-timestamp';
+                timestamp.textContent = `[${msg.elapsed_seconds.toFixed(3)}s] #${idx + 1} (${msg.node || 'Unknown'})`;
+
+                const textDiv = document.createElement('div');
+                textDiv.className = 'message-history-text';
+                // 전체 JSON response 표시
+                textDiv.textContent = JSON.stringify(msg, null, 2);
+
+                msgItem.appendChild(timestamp);
+                msgItem.appendChild(textDiv);
+                historyDiv.appendChild(msgItem);
             });
 
-            respDiv.textContent = displayResponses.map(r => JSON.stringify(r, null, 2)).join('\n\n---\n\n');
+            // 자동 스크롤 (맨 아래로)
+            historyDiv.scrollTop = historyDiv.scrollHeight;
         }
 
         function showChatInput(show) {
@@ -294,11 +458,11 @@
             ws = new WebSocket(`ws://${location.host}/ws/${sessionId}`);
             nodeResponses = {};
             nodeVisits = [];
+            allMessages = [];  // 메시지 히스토리 초기화
             selectedNodeIdx = null;
             document.getElementById('scoreCard').style.display = 'none';
             resetTimer();
-            renderNodes();
-            renderResponses();
+            updateDisplay();
 
             ws.onopen = () => {
                 updateStatus(`세션 ${sessionId}에 연결됨.`);
@@ -328,6 +492,11 @@
                 const enrichedData = { ...data, elapsed_seconds: elapsedSec };
                 nodeResponses[node].push(enrichedData);
 
+                // message 타입이면 전체 메시지 히스토리에 추가
+                if (enrichedData.type === 'message') {
+                    allMessages.push(enrichedData);
+                }
+
                 // 같은 (node, step) 쌍을 가진 기존 그룹 찾기
                 let existingGroup = null;
                 for (let i = nodeVisits.length - 1; i >= 0; i--) {
@@ -339,9 +508,6 @@
 
                 if (existingGroup) {
                     // 같은 (node, step)이면 기존 그룹에 추가
-                    if (enrichedData.type === 'message') {
-                        existingGroup.responses = existingGroup.responses.filter(r => r.type !== 'message');
-                    }
                     existingGroup.responses.push(enrichedData);
                 } else {
                     // 새로운 (node, step) 쌍이면 새 그룹 생성
@@ -355,8 +521,7 @@
                     nodeVisits.push({ node, step, count, responses: [enrichedData] });
                 }
                 selectedNodeIdx = nodeVisits.length - 1;
-                renderNodes();
-                renderResponses();
+                updateDisplay();
             };
 
             ws.onclose = () => {
