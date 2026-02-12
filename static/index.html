@@ -455,7 +455,8 @@
             sessionId = session_id;
             if (ws) ws.close();
 
-            ws = new WebSocket(`ws://${location.host}/ws/${sessionId}`);
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${wsProtocol}//${location.host}/ws/${sessionId}`);
             nodeResponses = {};
             nodeVisits = [];
             allMessages = [];  // 메시지 히스토리 초기화
