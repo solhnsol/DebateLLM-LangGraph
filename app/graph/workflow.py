@@ -175,7 +175,6 @@ class DebateWorkflow:
                     "node": node,
                     "step": step,
                     "content": {
-                        "status": "streaming",
                         "json_message": parsed,
                         "raw_message": chat_scripts[step],
                         "chunk": chunk
@@ -205,7 +204,6 @@ class DebateWorkflow:
                         "node": node,
                         "step": step,
                         "content": {
-                            "status": "complete",
                             "json_message": parsed,
                             "raw_message": content,
                         }
