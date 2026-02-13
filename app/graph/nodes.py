@@ -20,7 +20,7 @@ class DebateNodes:
     
     async def moderator_node(self, state: DebateState):
         if LLM_USED == "google" and not isinstance(state.messages[-1], HumanMessage):
-            state.messages.append(HumanMessage(content="계속 진행"))
+            state.messages.append(HumanMessage(content="주어진 역할과 상황에 맞게 행동하세요."))
         response, parsed = await self.moderator_agent.moderate_chat(state.topic, state.messages)
         response.name = "moderator"
         return {
@@ -30,7 +30,7 @@ class DebateNodes:
 
     async def debater_node(self, state: DebateState):
         if LLM_USED == "google" and not isinstance(state.messages[-1], (HumanMessage, ToolMessage)):
-            state.messages.append(HumanMessage(content="계속 진행"))
+            state.messages.append(HumanMessage(content="주어진 역할과 상황에 맞게 행동하세요."))
         response = await self.debater_agent.debate_chat(state.topic, state.messages, state.user_side)
         response.name = "debater"
         return {
@@ -46,7 +46,7 @@ class DebateNodes:
     
     async def judge_node(self, state: DebateState):
         if LLM_USED == "google" and not isinstance(state.messages[-1], HumanMessage):
-            state.messages.append(HumanMessage(content="계속 진행"))
+            state.messages.append(HumanMessage(content="주어진 역할과 상황에 맞게 행동하세요."))
         response, parsed = await self.judge_agent.judge_chat(state.topic, state.messages)
         response.name = "judge"
         return {
@@ -55,7 +55,7 @@ class DebateNodes:
 
     async def score_node(self, state: DebateState, writer: StreamWriter):
         if LLM_USED == "google" and not isinstance(state.messages[-1], HumanMessage):
-            state.messages.append(HumanMessage(content="계속 진행"))
+            state.messages.append(HumanMessage(content="주어진 역할과 상황에 맞게 행동하세요."))
         response, parsed = await self.score_agent.score_debate(state.topic, state.messages, state.user_side)
         
         await adispatch_custom_event(
