@@ -1,4 +1,4 @@
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import StreamWriter 
 from langchain_core.callbacks import adispatch_custom_event
 from app.models.schemas import DebateState
@@ -22,7 +22,8 @@ class DebateNodes:
         if LLM_USED == "google" and not isinstance(state.messages[-1], HumanMessage):
             state.messages.append(HumanMessage(content="주어진 역할과 상황에 맞게 행동하세요."))
         response, parsed = await self.moderator_agent.moderate_chat(state.topic, state.messages)
-        response.name = "moderator"
+        # response 메타데이터 유지하면서 content만 script로 교체
+        response = response.model_copy(update={"content": parsed.script, "name": "moderator"})
         return {
             "messages": [response],
             "next_speaker": parsed.next_speaker
@@ -48,7 +49,8 @@ class DebateNodes:
         if LLM_USED == "google" and not isinstance(state.messages[-1], HumanMessage):
             state.messages.append(HumanMessage(content="주어진 역할과 상황에 맞게 행동하세요."))
         response, parsed = await self.judge_agent.judge_chat(state.topic, state.messages)
-        response.name = "judge"
+        # response 메타데이터 유지하면서 content만 script로 교체
+        response = response.model_copy(update={"content": parsed.script, "name": "judge"})
         return {
             "messages": [response],
         }
@@ -66,11 +68,12 @@ class DebateNodes:
     def router(self, state: DebateState) -> str:
         if state.next_speaker == "end":
             return "judge"
-        
         if state.next_speaker == state.user_side:
             return "human"
-        else:
+        elif state.next_speaker in ["pro", "con"]:
             return "debater"
+        else:
+            return "judge"
 
 nodes = DebateNodes()
 

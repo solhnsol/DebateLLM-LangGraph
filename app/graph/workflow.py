@@ -45,7 +45,7 @@ class DebateWorkflow:
             {
                 "debater": "debater",
                 "human": "human",
-                "end": "judge"
+                "judge": "judge"
             }
         )
         
