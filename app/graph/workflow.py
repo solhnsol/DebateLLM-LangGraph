@@ -113,7 +113,6 @@ class DebateWorkflow:
             raise RuntimeError("ERROR: Workflow not compiled.")
         chat_scripts = {}
         config = {"configurable": {"thread_id": session_id}}
-
         async for event in self.app.astream_events(
             None,
             config,
@@ -196,7 +195,13 @@ class DebateWorkflow:
                     except:
                         parsed = None
                 else:
-                    parsed = {"script": content}
+                    if isinstance(content, list):
+                        script = [item["text"] if isinstance(item, dict) and "text" in item else item for item in content]
+                        parsed = {"script": script}
+                    elif isinstance(content, dict) and "text" in content:
+                        parsed = {"script": content["text"]}
+                    else:
+                        parsed = {"script": content}
                 
                 if step in chat_scripts:
                     yield {

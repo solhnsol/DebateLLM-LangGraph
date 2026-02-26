@@ -98,6 +98,7 @@ class BaseAgent:
         response = await chain.ainvoke({
             "messages": messages
         })
+        
         if self.output_schema:
             return response["raw"], response["parsed"]
         return response, None

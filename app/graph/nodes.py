@@ -64,7 +64,7 @@ class DebateNodes:
             )
 
     def router(self, state: DebateState) -> str:
-        if state.next_speaker == "judge":
+        if state.next_speaker == "end":
             return "judge"
         
         if state.next_speaker == state.user_side:
